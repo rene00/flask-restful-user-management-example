@@ -111,7 +111,7 @@ def get_user_from_token(token):
 
 class Register(Resource):
     post_kwargs = {
-        'email': fields.Str(required=True),
+        'email': fields.Str(required=True, validate=validate.Email()),
         'password': fields.Str(required=True, validate=validate.Length(min=6))
     }
 
