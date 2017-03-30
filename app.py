@@ -1,7 +1,7 @@
 from webargs import fields, validate
 from webargs.flaskparser import abort, parser, use_kwargs
 from functools import wraps
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_restful import Resource, Api
 from flask_security import (
     SQLAlchemyUserDatastore, Security, AnonymousUser,
@@ -84,6 +84,13 @@ def requires_auth(f):
 
 def authenticate():
     abort(401, message="login required")
+
+
+def error(status_code, message):
+    "API error"
+    response = jsonify({'message': message})
+    response.status_code = status_code
+    return response
 
 
 from itsdangerous import URLSafeTimedSerializer
@@ -169,6 +176,25 @@ class Info(Resource):
         return models.UserSchema().dump(user)
 
 
+class Plan(Resource):
+
+    get_kwargs = {
+        'plan_id': fields.Int(required=True),
+    }
+
+    @use_kwargs(get_kwargs)
+    def get(self, plan_id):
+        try:
+            plan = (
+                models.db.session.query(models.Plan).
+                filter_by(id=plan_id)
+            ).one()
+        except NoResultFound:
+            return error(404, 'Plan not found.')
+
+        return models.PlanSchema().dump(plan)
+
 api.add_resource(Register, '/account/register')
 api.add_resource(Login, '/account/login')
 api.add_resource(Info, '/account/info')
+api.add_resource(Plan, '/plan')
