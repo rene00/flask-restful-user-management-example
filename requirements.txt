@@ -4,3 +4,4 @@ SQLAlchemy
 bcrypt
 flask_restful
 webargs
+marshmallow-sqlalchemy
