@@ -10,7 +10,7 @@ from flask_security import (
 from flask_security.utils import encrypt_password, verify_password, md5
 from flask_login import LoginManager
 from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 
 
 class Configuration:
@@ -27,6 +27,14 @@ import models
 from models import db
 
 db.create_all()
+
+# plans
+for plan_name in ('bronze', 'silver', 'gold'):
+    db.session.add(models.Plan(name=plan_name))
+    try:
+        db.session.commit()
+    except (IntegrityError, InvalidRequestError):
+        pass
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -113,6 +121,13 @@ class Register(Resource):
             email=email,
             password=encrypt_password(password)
         )
+
+        plan = (
+            models.db.session.query(models.Plan).
+            filter_by(name='bronze').one()
+        )
+        user.plan = plan
+
         try:
             db.session.commit()
         except IntegrityError:

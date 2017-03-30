@@ -25,7 +25,7 @@ class Role(db.Model, RoleMixin):
 
 class UserSchema(ModelSchema):
     class Meta:
-        fields = ('id', 'email',)
+        fields = ('id', 'email', 'plan_id')
 
 
 class User(db.Model, UserMixin):
@@ -41,3 +41,19 @@ class User(db.Model, UserMixin):
         'Role', secondary=roles_users,
         backref=db.backref('users', lazy='dynamic')
     )
+    plan_id = db.Column(db.Integer, db.ForeignKey('plan.id'))
+
+
+class PlanSchema(ModelSchema):
+    class Meta:
+        fields = ('id', 'name')
+
+
+class Plan(db.Model):
+    __tablename__ = 'plan'
+    __table_args__ = {'mysql_charset': 'utf8'}
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), unique=True)
+
+    user = db.relationship('User', backref='plan', uselist=False)
