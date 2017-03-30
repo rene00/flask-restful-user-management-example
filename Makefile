@@ -11,7 +11,7 @@ FLASK_PORT ?= 5002
 default: build
 
 build:
-	py3-virtualenv $(VENV)
+	virtualenv --python=python3 $(VENV)
 	$(PIP) install -r requirements.txt
 
 run:
@@ -24,6 +24,6 @@ rebuild_db:
 	$(PYTHON) manage.py initdata
 
 clean:
-	rm -rf $(VENV)
+	rm -rf $(VENV) __pycache__
 	find . -name '*.pyc' -exec rm -f {} +
 	find . -name '*.pyo' -exec rm -f {} +
