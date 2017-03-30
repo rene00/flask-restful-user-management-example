@@ -1,0 +1,6 @@
+Flask-SQLAlchemy
+Flask-Security
+SQLAlchemy
+bcrypt
+flask_restful
+webargs
