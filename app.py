@@ -1,24 +1,46 @@
 from webargs import fields, validate
 from webargs.flaskparser import abort, parser, use_kwargs
 from functools import wraps
-from flask import Flask, request, jsonify
+from flask import (
+    Blueprint, Flask, request, redirect, jsonify, url_for,
+    after_this_request, render_template_string
+)
+from flask_mail import Mail
 from flask_restful import Resource, Api
 from flask_security import (
     SQLAlchemyUserDatastore, Security, AnonymousUser,
     auth_token_required
 )
-from flask_security.utils import encrypt_password, verify_password, md5
-from flask_login import LoginManager
+from flask_security.confirmable import (
+    generate_confirmation_token, confirm_email_token_status, confirm_user
+)
+from flask_security.utils import (
+    encrypt_password, verify_password, md5, send_mail
+)
+from flask_security.views import _commit
+from flask_login import LoginManager, current_user, logout_user, login_user
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from itsdangerous import URLSafeTimedSerializer
+from werkzeug.security import safe_str_cmp
 
 
 class Configuration:
+    REGISTERABLE = True
     SECRET_KEY = 'femNuccodcutAbAp'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_DATABASE_URI = ('sqlite:///app.db')
+    SECURITY_COMFIRMABLE = True
+    SECURITY_RECOVERABLE = True
     SECURITY_PASSWORD_HASH = 'bcrypt'
     SECURITY_PASSWORD_SALT = 'CrotbiobmenPibej'
+    CONFIRM_REGISTRATION = True
+    MAIL_SERVER = 'localhost'
+    MAIL_PORT = 25
+    EMAIL_SUBJECT_REGISTER = 'Welcome'
+    EMAIL_SUBJECT_CONFIRM = 'Please Confirm'
+    SEND_REGISTER_EMAIL = True
+    SECURITY_EMAIL_SENDER = 'admin@example.org'
 
 app = Flask(__name__)
 app.config.from_object(Configuration)
@@ -43,6 +65,8 @@ user_datastore = SQLAlchemyUserDatastore(models.db, models.User, models.Role)
 security = Security(app, user_datastore, register_blueprint=False)
 
 api = Api(app)
+
+mail = Mail(app)
 
 
 @parser.error_handler
@@ -93,10 +117,6 @@ def error(status_code, message):
     return response
 
 
-from itsdangerous import URLSafeTimedSerializer
-from werkzeug.security import safe_str_cmp
-
-
 def get_user_from_token(token):
     # app = current_app._get_current_object()
     key = app.config['SECRET_KEY']
@@ -109,14 +129,45 @@ def get_user_from_token(token):
     return AnonymousUser
 
 
+def confirm_error():
+    return render_template_string('Confirmed Error')
+
+
+def confirmed():
+    return render_template_string('Confirmed Successfully')
+
+
+def confirm_token(token):
+    expired, invalid, user = confirm_email_token_status(token)
+
+    if not user or invalid:
+        invalid = True
+
+    if invalid or expired:
+        return redirect(url_for('confirm_error'))
+
+    if user != current_user:
+        logout_user()
+        login_user(user)
+
+    if confirm_user(user):
+        after_this_request(_commit)
+
+    return redirect(url_for('confirmed'))
+
+
 class Register(Resource):
     post_kwargs = {
-        'email': fields.Str(required=True, validate=validate.Email()),
+        'email': fields.Str(required=True),
         'password': fields.Str(required=True, validate=validate.Length(min=6))
     }
 
     @use_kwargs(post_kwargs)
     def post(self, email, password):
+
+        if not app.config.get('REGISTERABLE'):
+            abort(403, errors='Registration disabled.')
+
         try:
             models.db.session.query(models.User).filter_by(email=email).one()
         except NoResultFound:
@@ -139,8 +190,19 @@ class Register(Resource):
             db.session.commit()
         except IntegrityError:
             return abort(501, errors='Failed to register.')
-        else:
-            return models.UserSchema().dump(user)
+
+        if app.config.get('CONFIRM_REGISTRATION'):
+            token = generate_confirmation_token(user)
+            confirmation_link = token
+            user.active = False
+            if app.config.get('SEND_REGISTER_EMAIL'):
+                send_mail(
+                    app.config.get('EMAIL_SUBJECT_CONFIRM'),
+                    user.email, 'confirmation_instructions', user=user,
+                    confirmation_link=confirmation_link
+                )
+
+        return models.UserSchema().dump(user)
 
 
 class Login(Resource):
@@ -198,3 +260,16 @@ api.add_resource(Register, '/account/register')
 api.add_resource(Login, '/account/login')
 api.add_resource(Info, '/account/info')
 api.add_resource(Plan, '/plan')
+
+
+bp = Blueprint('bp', __name__)
+bp.route(
+    '/confirm/token/<token>', methods=['GET', 'POST'], endpoint='confirm_token'
+)(confirm_token)
+bp.route(
+    '/confirm/success', methods=['GET', 'POST'], endpoint='confirmed'
+)(confirmed)
+bp.route(
+    '/confirm/error', methods=['GET'], endpoint='confirm_error'
+)(confirm_error)
+app.register_blueprint(bp)
