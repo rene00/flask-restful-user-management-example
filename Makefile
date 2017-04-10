@@ -6,7 +6,7 @@ PIP = $(VENV)/bin/pip
 FLASK = $(VENV)/bin/flask
 FLASK_DEBUG ?= 1
 FLASK_HOST ?= 127.0.0.1
-FLASK_PORT ?= 5002
+FLASK_PORT ?= 5000
 
 default: build
 
