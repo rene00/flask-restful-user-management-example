@@ -144,7 +144,7 @@ def confirm_token(token):
         invalid = True
 
     if invalid or expired:
-        return redirect(url_for('confirm_error'))
+        return redirect(url_for('app.confirm_error'))
 
     if user != current_user:
         logout_user()
@@ -153,7 +153,7 @@ def confirm_token(token):
     if confirm_user(user):
         after_this_request(_commit)
 
-    return redirect(url_for('confirmed'))
+    return redirect(url_for('app.confirmed'))
 
 
 class Register(Resource):
@@ -193,7 +193,9 @@ class Register(Resource):
 
         if app.config.get('CONFIRM_REGISTRATION'):
             token = generate_confirmation_token(user)
-            confirmation_link = token
+            confirmation_link = url_for(
+                'app.confirm_token', token=token, _external=True
+            )
             user.active = False
             if app.config.get('SEND_REGISTER_EMAIL'):
                 send_mail(
@@ -262,7 +264,7 @@ api.add_resource(Info, '/account/info')
 api.add_resource(Plan, '/plan')
 
 
-bp = Blueprint('bp', __name__)
+bp = Blueprint('app', __name__)
 bp.route(
     '/confirm/token/<token>', methods=['GET', 'POST'], endpoint='confirm_token'
 )(confirm_token)
